@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,6 +14,25 @@ namespace Demo
     public partial class MainForm : Form
     {
         private DeviceProxy.DeviceProxy deviceProxy = new DeviceProxy.DeviceProxy();
+        private Dictionary<int, StreamWriter> ChannelDataStreamWriters = new Dictionary<int, StreamWriter>();
+        private String currentChannelDataDir;
+
+        public MainForm()
+        {
+            InitializeComponent();
+            deviceProxy.SetChannelDataCallBack(ChannelDataCallBack);
+        }
+
+        protected void ChannelDataCallBack(int channel, byte[] data)
+        {
+            if(!ChannelDataStreamWriters.ContainsKey(channel))
+            {
+                ChannelDataStreamWriters[channel] = new StreamWriter(File.Open(currentChannelDataDir + String.Format(@"\通道{0}.txt", channel),
+                    FileMode.Create, FileAccess.Write, FileShare.Read));
+            }
+            ChannelDataStreamWriters[channel].WriteLine(byteToHexStr(data));
+            ChannelDataStreamWriters[channel].Flush();
+        }
 
         protected void DisconnectCallback(int reason)
         {
@@ -45,19 +65,22 @@ namespace Demo
             Invoke(action);
         }
 
-        public MainForm()
-        {
-            InitializeComponent();
-        }
-
         private void btnConnect_Click(object sender, EventArgs e)
         {
+            foreach (StreamWriter streamWriter in ChannelDataStreamWriters.Values)
+            {
+                streamWriter.Close();
+            }
+            ChannelDataStreamWriters.Clear();
             if (deviceProxy.ConnectToHost(editIpAddr.Text, int.Parse(editPort.Text), 1000, DisconnectCallback))
             {
                 editIpAddr.Enabled = false;
                 editPort.Enabled = false;
                 btnConnect.Enabled = false;
                 btnDisconnect.Enabled = true;
+                currentChannelDataDir = AppDomain.CurrentDomain.SetupInformation.ApplicationBase + DateTime.Now.ToString("yyyyMMddHHmmss");
+                Directory.CreateDirectory(currentChannelDataDir);
+
             }
             else
             {

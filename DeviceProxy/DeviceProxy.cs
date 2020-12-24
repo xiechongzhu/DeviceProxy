@@ -19,13 +19,20 @@ namespace DeviceProxy
         private const int MAX_CHANNEL_DATA_LENGTH = 10 * 1024 * 1024;
 
         public delegate void DisconnectCallBack(int reason);
+        public delegate void ChannelDataCallBack(int channel, byte[] data);
         private TcpClient socket;
         private DisconnectCallBack disconnectCallBack;
+        private ChannelDataCallBack channelDataCallBack;
         private bool bIsConnected = false;
         private byte[] recvBuffer = new byte[100 *1024 * 1024];
         private int recvBufferWritePos = 0;
         private Dictionary<Int32, byte[]> channelDataMap = new Dictionary<int, byte[]>();
         private object channelDataMutex = new object();
+
+        public void SetChannelDataCallBack(ChannelDataCallBack callBack)
+        {
+            channelDataCallBack = callBack;
+        }
 
         public bool ConnectToHost(String ipAddr, int port, int timeout, DisconnectCallBack callBack)
         {
@@ -70,7 +77,15 @@ namespace DeviceProxy
                     return new byte[0];
                 }
                 byte[] channelData = channelDataMap[channel];
-                Int32 len = Math.Min(maxLength, channelData.Length);
+                Int32 len;
+                if(-1 == maxLength)
+                {
+                    len = channelData.Length;
+                }
+                else
+                {
+                    len = Math.Min(maxLength, channelData.Length);
+                }
                 byte[] retData = channelData.Take(len).ToArray();
                 channelDataMap[channel] = channelData.Skip(len).ToArray();
                 return retData;
@@ -216,6 +231,7 @@ namespace DeviceProxy
                         channelDataMap[header.Channel] = channelDataMap[header.Channel].Skip(channelDataMap[header.Channel].Length - MAX_CHANNEL_DATA_LENGTH).ToArray();
                     }
                 }
+                channelDataCallBack?.Invoke(header.Channel, deviceData);
             }
         }
     }
